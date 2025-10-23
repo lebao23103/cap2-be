@@ -51,26 +51,16 @@ class LoginView(APIView):
     def post(self, request):
         data = request.data
         email = data.get('email'); password = data.get('password')
-<<<<<<< HEAD
-=======
-
->>>>>>> giabao
         try:
             user = User.objects.get(email=email)
             auth_user = authenticate(request, username=user.username, password=password)
             if auth_user is None:
                 return Response({'message': 'Invalid password!'}, status=status.HTTP_401_UNAUTHORIZED)
-<<<<<<< HEAD
-            refresh = RefreshToken.for_user(auth_user)
-            return Response({
-                'token': str(refresh.access_token),
-=======
 
             refresh = RefreshToken.for_user(auth_user)
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),   # <--- thêm dòng này
->>>>>>> giabao
                 'user': {
                     'id': auth_user.id,
                     'first_name': auth_user.first_name,
@@ -516,11 +506,6 @@ def delete_book(request, book_id):
             book.cover_image.delete(save=False)
         if book.pdf_file:
             book.pdf_file.delete(save=False)
-<<<<<<< HEAD
-            
-=======
-
->>>>>>> giabao
         book.delete()
         return Response({"message": "Book deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:
