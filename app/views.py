@@ -84,7 +84,7 @@ class LogoutView(APIView):
 
 class ForgotPasswordView(APIView):
     def post(self, request):
-        email = request.data.get('email')
+        email = request.data.get('emax`il')
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:

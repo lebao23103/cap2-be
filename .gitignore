@@ -18,3 +18,4 @@ db.sqlite3
 
 data/
 media/
+/pdf_page_to_image.py

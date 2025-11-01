@@ -1,8 +1,8 @@
 # app/urls.py
 from django.urls import path
 from . import views
-from .chatbot_view import ChatbotAPIView, chatbot_conversation, multi_turn_chat
-
+from .chatbot_view import chat_send, conversations_list, conversation_messages, conversation_end
+from .booknote_view import create_book_note, get_user_book_notes, get_note_detail, update_book_note, delete_book_note, get_public_book_notes, get_personalized_book_content, get_all_user_notes, get_user_notes_statistics
 urlpatterns = [
     path('', views.home, name='home'),
 
@@ -23,11 +23,6 @@ urlpatterns = [
     # ===== Reviews =====
     path('api/books/<int:book_id>/add_review/', views.add_review, name='add_review'),
     path('api/books/<int:book_id>/reviews/', views.get_book_reviews, name='get_book_reviews'),
-
-    # ===== AI APIs (giữ nguyên như bạn yêu cầu) =====
-    path('api/chatbot/', ChatbotAPIView.as_view(), name='chatbot'),
-    path('api/chatbot/conversation/', chatbot_conversation, name='chatbot_conversation'),
-    path('api/chatbot/multi-turn/', multi_turn_chat, name='multi_turn_chat'),
 
     # ===== User profile =====
     path('user/profile/<int:user_id>/', views.get_user_profile, name='get-user-profile'),
@@ -67,8 +62,31 @@ urlpatterns = [
     path('api/approve-user-book/<int:user_book_id>/', views.ApproveUserBookView.as_view(), name='approve-user-book'),
     path('api/reject-delete-book/<int:book_id>/', views.RejectAndDeleteBookView.as_view(), name='reject-delete-book'),
     path('api/list-approved-books/', views.ListApprovedBooksView.as_view(), name='list-approved-books'),
-
-    # NOTE: Endpoint import Gutenberg theo genre cũ. View đã remove trong views.py mới.
-    # Mình GIỮ NGUYÊN dưới dạng comment để bạn tự bật khi cần.
-    # path('api/admin/fetch-books-genre/', views.fetch_books_by_genre, name='fetch_books_by_genre'),  # TODO: view đã remove
+    # ===== Chatbot endpoints =====
+    path("chat/send", chat_send),
+    path("chat/conversations", conversations_list),
+    path("chat/conversations/<uuid:conversation_id>/messages", conversation_messages),
+    path("chat/conversations/<uuid:conversation_id>/end", conversation_end),
+    
+       # ================= BOOK NOTES APIs =================
+    
+    # --- Create & List Notes ---
+    path('api/books/<int:book_id>/notes/', get_user_book_notes, name='get_user_book_notes'),
+    path('api/books/<int:book_id>/notes/create/', create_book_note, name='create_book_note'),
+    
+    # --- Single Note Operations ---
+    path('api/books/<int:book_id>/notes/<int:note_id>/',get_note_detail, name='get_note_detail'),
+    path('api/books/<int:book_id>/notes/<int:note_id>/update/', update_book_note, name='update_book_note'),
+    path('api/books/<int:book_id>/notes/<int:note_id>/delete/', delete_book_note, name='delete_book_note'),
+    
+    # --- Personalized Reading (Version 2) ---
+    path('api/books/<int:book_id>/personalized/', get_personalized_book_content, name='get_personalized_book_content'),
+    
+    # --- Public Notes ---
+    path('api/books/<int:book_id>/notes/public/', get_public_book_notes, name='get_public_book_notes'),
+    
+    # --- User Notes Management ---
+    path('api/my-notes/', get_all_user_notes, name='get_all_user_notes'),
+    path('api/my-notes/stats/', get_user_notes_statistics, name='get_user_notes_statistics'),
+    
 ]

@@ -1,179 +1,116 @@
-from rest_framework.views import APIView
+# app/chat/views.py
+from django.shortcuts import get_object_or_404
+from django.db import transaction
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+
+from .models import ChatConversation, ChatMessage
+from .chatbot_serializers import (
+    ChatSendSerializer, ChatConversationSerializer, ChatMessageSerializer
+)
+
+# Dùng hàm gọi AI từ utils/ai_api (đÃ hỗ trợ role + context)
 from .utils.ai_api import ask_mistral
-from rest_framework.decorators import api_view, permission_classes
-import json
 
-class ChatbotAPIView(APIView):
-    """
-    API for chatbot interaction using external AI service
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        try:
-            user_input = request.data.get('message', '')
-            role = request.data.get('role', 'book advisor')  # Default role
-            
-            if not user_input:
-                return Response({
-                    'error': 'Message is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Get AI response using your existing function
-            ai_response = ask_mistral(user_input)
-            
-            if ai_response == "Sorry, I could not respond at the moment.":
-                return Response({
-                    'error': 'AI service temporarily unavailable'
-                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            
-            return Response({
-                'user_message': user_input,
-                'ai_response': ai_response,
-                'role': role,
-                'status': 'success'
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response({
-                'error': f'An error occurred: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# Số message gần nhất dùng làm ngữ cảnh
+MAX_CONTEXT_MSG = 12
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def chatbot_conversation(request):
+def generate_ai_reply(user_message: str, role: str, context_messages: list[dict]) -> str:
     """
-    Function-based view for chatbot conversation
-    Supports custom role and content configuration
+    Gọi AI bằng API key của bạn thông qua ask_mistral(role, context).
     """
-    try:
-        data = request.data
-        user_message = data.get('message', '')
-        custom_role = data.get('role', None)
-        conversation_context = data.get('context', [])
-        
-        if not user_message:
-            return Response({
-                'error': 'Message field is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # If custom role is provided, create a customized function call
-        if custom_role:
-            ai_response = ask_mistral_with_custom_role(user_message, custom_role, conversation_context)
-        else:
-            # Use default book advisor role
-            ai_response = ask_mistral(user_message)
-        
-        return Response({
-            'conversation': {
-                'user': user_message,
-                'ai': ai_response,
-                'role': custom_role or 'book advisor',
-                'timestamp': request.META.get('HTTP_DATE', 'unknown')
-            },
-            'status': 'success'
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        return Response({
-            'error': f'Conversation error: {str(e)}',
-            'status': 'failed'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    # Chuẩn hoá context: chỉ nhận role hợp lệ + có content
+    safe_ctx = []
+    for m in (context_messages or [])[-MAX_CONTEXT_MSG:]:
+        if isinstance(m, dict) and m.get("role") in ("system", "user", "assistant") and m.get("content"):
+            safe_ctx.append({"role": m["role"], "content": m["content"]})
 
+    custom_role = (role or "helpful assistant").strip()
 
-def ask_mistral_with_custom_role(user_input, custom_role, context=None):
-    """
-    Enhanced version of ask_mistral with custom role and context support
-    """
-    from openai import OpenAI
-    import os
-    
-    client = OpenAI(
-        api_key=os.getenv("GROQ_API_KEY"),
-        base_url="https://api.groq.com/openai/v1"
+    # Gọi AI qua utils/ai_api.ask_mistral (đã hỗ trợ role & context)
+    return ask_mistral(
+        user_input=user_message,
+        role=custom_role,
+        context=safe_ctx
     )
-    
-    try:
-        # Build messages array with custom role
-        messages = [
-            {"role": "system", "content": f"You are a {custom_role}. Be helpful and professional in your responses."}
-        ]
-        
-        # Add conversation context if provided
-        if context and isinstance(context, list):
-            for msg in context[-5:]:  # Limit to last 5 messages for context
-                if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
-                    messages.append(msg)
-        
-        # Add current user message
-        messages.append({"role": "user", "content": user_input})
-        
-        response = client.chat.completions.create(
-            model="mistral-saba-24b",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2048
-        )
-        
-        reply = response.choices[0].message.content
-        print(f"[✔] Response from {custom_role}:", reply)
-        return reply
-        
-    except Exception as e:
-        print(f"[❌] Error calling AI API with custom role: {str(e)}")
-        return "Sorry, I could not respond at the moment."
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def multi_turn_chat(request):
+def chat_send(request):
     """
-    Multi-turn conversation handler
-    Maintains conversation history for context
+    Gửi 1 tin nhắn. Nếu không có conversation_id -> tạo mới.
+    Lưu user msg + assistant msg vào DB và trả về conversation_id + trả lời AI.
     """
+    s = ChatSendSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    message = s.validated_data["message"].strip()
+    role = s.validated_data.get("role") or "helpful assistant"
+    conv_id = s.validated_data.get("conversation_id")
+
+    if not message:
+        return Response({"error": "Message is required."}, status=400)
+
+    if conv_id:
+        conv = get_object_or_404(ChatConversation, id=conv_id, owner=request.user)
+        if not conv.is_active:
+            return Response({"error": "Conversation ended."}, status=400)
+    else:
+        conv = ChatConversation.objects.create(
+            owner=request.user,
+            role=role,
+            title=message[:80]
+        )
+
+    # Build context từ DB (lấy ngược rồi đảo lại để đúng thứ tự)
+    recent = list(conv.messages.order_by("-created_at")[:MAX_CONTEXT_MSG][::-1])
+    context_messages = [{"role": m.role, "content": m.content} for m in recent]
+
     try:
-        data = request.data
-        message = data.get('message', '')
-        conversation_id = data.get('conversation_id', None)
-        role = data.get('role', 'helpful assistant')
-        
-        if not message:
-            return Response({
-                'error': 'Message is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Here you could implement conversation storage in database
-        # For now, we'll use the conversation history passed from frontend
-        conversation_history = data.get('history', [])
-        
-        # Build context from history
-        context_messages = []
-        for hist in conversation_history[-10:]:  # Last 10 messages for context
-            if 'user' in hist:
-                context_messages.append({"role": "user", "content": hist['user']})
-            if 'ai' in hist:
-                context_messages.append({"role": "assistant", "content": hist['ai']})
-        
-        # Get AI response with context
-        ai_response = ask_mistral_with_custom_role(message, role, context_messages)
-        
-        return Response({
-            'conversation_id': conversation_id or f"conv_{request.user.id}_{hash(message)}",
-            'message': {
-                'user': message,
-                'ai': ai_response,
-                'role': role,
-                'user_id': request.user.id,
-                'username': request.user.username
-            },
-            'status': 'success'
-        }, status=status.HTTP_200_OK)
-        
+        ai_text = generate_ai_reply(message, conv.role or role, context_messages)
     except Exception as e:
-        return Response({
-            'error': f'Multi-turn chat error: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # ask_mistral đã tự catch phần lớn lỗi và trả "Sorry, ..."
+        # Khối này chỉ bắt lỗi bất ngờ (serialization, etc.)
+        return Response({"error": f"AI call failed: {e}"}, status=502)
+
+    with transaction.atomic():
+        ChatMessage.objects.create(conversation=conv, role="user", content=message)
+        ChatMessage.objects.create(conversation=conv, role="assistant", content=ai_text)
+        conv.save(update_fields=["updated_at"])
+
+    return Response({
+        "conversation_id": str(conv.id),
+        "role": conv.role,
+        "message": {"user": message, "ai": ai_text}
+    }, status=200)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def conversations_list(request):
+    qs = ChatConversation.objects.filter(owner=request.user).order_by("-updated_at")[:50]
+    return Response(ChatConversationSerializer(qs, many=True).data, status=200)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def conversation_messages(request, conversation_id):
+    limit = int(request.query_params.get("limit", 50))
+    conv = get_object_or_404(ChatConversation, id=conversation_id, owner=request.user)
+    msgs = conv.messages.order_by("-created_at")[:limit][::-1]
+    return Response({
+        "conversation": str(conv.id),
+        "items": ChatMessageSerializer(msgs, many=True).data
+    }, status=200)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def conversation_end(request, conversation_id):
+    conv = get_object_or_404(ChatConversation, id=conversation_id, owner=request.user)
+    conv.is_active = False
+    conv.save(update_fields=["is_active", "updated_at"])
+    return Response({"ok": True}, status=200)
