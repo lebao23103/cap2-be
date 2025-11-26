@@ -6,7 +6,8 @@ from django.core.mail import send_mail
 from django.core.cache import cache
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-
+from django.utils import timezone
+from django.shortcuts import render, get_object_or_404
 from rest_framework import status, permissions, views
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
@@ -14,11 +15,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Book, FavoriteBook, ReadingHistory, UserBook, Review
+from .models import Book, FavoriteBook, ReadingHistory, UserBook, Review, Question, QuizSession, UserAnswer
 from .serializers import (
     BookSerializer, ReviewSerializer, FavoriteBookSerializer,
     ReadingHistorySerializer, ResetPasswordSerializer, ChangePasswordSerializer,
-    UserBookSerializer
+    UserBookSerializer, QuestionSerializer, QuestionListSerializer,
+    QuizSessionSerializer, QuizSessionListSerializer, UserAnswerSerializer
 )
 
 import random, string
@@ -510,3 +512,171 @@ def delete_book(request, book_id):
         return Response({"message": "Book deleted successfully"}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": f"Failed to delete book: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ================= QUESTION APIs =================
+@api_view(['GET'])
+def get_questions_by_book(request, book_id):
+    """
+    Lấy danh sách câu hỏi theo book_id
+    """
+    questions = Question.objects.filter(book_id=book_id).order_by('order_num')
+    serializer = QuestionListSerializer(questions, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_question(request):
+    """
+    Tạo một câu hỏi mới (chỉ admin hoặc người có quyền)
+    """
+    serializer = QuestionSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_question(request, question_id):
+    """
+    Cập nhật một câu hỏi (chỉ admin hoặc người có quyền)
+    """
+    question = get_object_or_404(Question, id=question_id)
+    serializer = QuestionSerializer(question, data=request.data, partial=False)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_question(request, question_id):
+    """
+    Xóa một câu hỏi (chỉ admin hoặc người có quyền)
+    """
+    question = get_object_or_404(Question, id=question_id)
+    question.delete()
+    return Response({"message": "Question deleted successfully"}, status=status.HTTP_200_OK)
+
+
+# ================= QUIZ SESSION APIs =================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def start_quiz(request, book_id):
+    """
+    Bắt đầu một phiên làm quiz cho một cuốn sách
+    """
+    book = get_object_or_404(Book, id=book_id)
+    questions = Question.objects.filter(book=book)
+    
+    if not questions.exists():
+        return Response({"error": "No questions available for this book"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Tạo phiên làm quiz mới
+    quiz_session = QuizSession.objects.create(
+        user=request.user,
+        book=book,
+        total_questions=questions.count()
+    )
+    
+    serializer = QuizSessionSerializer(quiz_session)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_quiz_session(request, session_id):
+    """
+    Lấy thông tin chi tiết của một phiên làm quiz
+    """
+    quiz_session = get_object_or_404(QuizSession, id=session_id, user=request.user)
+    serializer = QuizSessionSerializer(quiz_session)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_quiz_sessions(request):
+    """
+    Lấy danh sách các phiên làm quiz của user
+    """
+    quiz_sessions = QuizSession.objects.filter(user=request.user)
+    serializer = QuizSessionListSerializer(quiz_sessions, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def submit_answer(request, session_id):
+    """
+    Nộp câu trả lời cho một câu hỏi trong quiz
+    """
+    quiz_session = get_object_or_404(QuizSession, id=session_id, user=request.user)
+    
+    if quiz_session.completed:
+        return Response({"error": "Quiz session already completed"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    question_id = request.data.get('question_id')
+    selected_answer = request.data.get('selected_answer')
+    
+    if not question_id or not selected_answer:
+        return Response({"error": "question_id and selected_answer are required"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    question = get_object_or_404(Question, id=question_id)
+    
+    # Kiểm tra xem câu hỏi có thuộc về cuốn sách của phiên quiz không
+    if question.book != quiz_session.book:
+        return Response({"error": "Question does not belong to this quiz"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Kiểm tra định dạng đáp án
+    if selected_answer not in ['A', 'B', 'C', 'D']:
+        return Response({"error": "Selected answer must be A, B, C, or D"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Kiểm tra xem đã trả lời câu hỏi này chưa
+    existing_answer = UserAnswer.objects.filter(quiz_session=quiz_session, question=question).first()
+    if existing_answer:
+        return Response({"error": "Question already answered"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Tạo bản ghi câu trả lời
+    is_correct = (selected_answer == question.correct_answer)
+    user_answer = UserAnswer.objects.create(
+        quiz_session=quiz_session,
+        question=question,
+        selected_answer=selected_answer,
+        is_correct=is_correct
+    )
+    
+    # Cập nhật điểm nếu trả lời đúng
+    if is_correct:
+        quiz_session.score = (quiz_session.score or 0) + 1
+        quiz_session.save(update_fields=['score'])
+    
+    serializer = UserAnswerSerializer(user_answer)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def complete_quiz(request, session_id):
+    """
+    Hoàn thành phiên làm quiz và tính toán điểm số
+    """
+    quiz_session = get_object_or_404(QuizSession, id=session_id, user=request.user)
+    
+    if quiz_session.completed:
+        return Response({"error": "Quiz session already completed"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Đánh dấu phiên quiz đã hoàn thành
+    quiz_session.completed = True
+    quiz_session.completed_at = timezone.now()
+    quiz_session.save(update_fields=['completed', 'completed_at'])
+    
+    serializer = QuizSessionSerializer(quiz_session)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+def test_pdf_notes_view(request, book_id):
+    book = get_object_or_404(Book, id=book_id)
+    return render(request, "test_pdf_notes.html", {"book": book})

@@ -19,3 +19,6 @@ db.sqlite3
 data/
 media/
 /pdf_page_to_image.py
+POSTMAN_HUONG_DAN.md 
+templates/
+migrations

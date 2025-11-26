@@ -3,9 +3,11 @@ from django.urls import path
 from . import views
 from .chatbot_view import chat_send, conversations_list, conversation_messages, conversation_end
 from .booknote_view import create_book_note, get_user_book_notes, get_note_detail, update_book_note, delete_book_note, get_public_book_notes, get_personalized_book_content, get_all_user_notes, get_user_notes_statistics
+from .views import test_pdf_notes_view
+
 urlpatterns = [
     path('', views.home, name='home'),
-
+    path('books/<int:book_id>/test-notes/', test_pdf_notes_view, name='test-pdf-notes'),
     # ===== Auth (giữ nguyên) =====
     path('api/register/', views.RegisterView.as_view(), name='register'),
     path('api/login/', views.LoginView.as_view(), name='login'),
@@ -89,4 +91,16 @@ urlpatterns = [
     path('api/my-notes/', get_all_user_notes, name='get_all_user_notes'),
     path('api/my-notes/stats/', get_user_notes_statistics, name='get_user_notes_statistics'),
     
+    # ================= QUESTION APIs =================
+    path('api/books/<int:book_id>/questions/', views.get_questions_by_book, name='get_questions_by_book'),
+    path('api/questions/create/', views.create_question, name='create_question'),
+    path('api/questions/<int:question_id>/update/', views.update_question, name='update_question'),
+    path('api/questions/<int:question_id>/delete/', views.delete_question, name='delete_question'),
+    
+    # ================= QUIZ SESSION APIs =================
+    path('api/quiz/start/<int:book_id>/', views.start_quiz, name='start_quiz'),
+    path('api/quiz/session/<int:session_id>/', views.get_quiz_session, name='get_quiz_session'),
+    path('api/quiz/sessions/', views.get_user_quiz_sessions, name='get_user_quiz_sessions'),
+    path('api/quiz/session/<int:session_id>/submit-answer/', views.submit_answer, name='submit_answer'),
+    path('api/quiz/session/<int:session_id>/complete/', views.complete_quiz, name='complete_quiz'),
 ]
