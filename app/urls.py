@@ -3,17 +3,18 @@ from django.urls import path
 from . import views
 from .chatbot_view import chat_send, conversations_list, conversation_messages, conversation_end
 from .booknote_view import create_book_note, get_user_book_notes, get_note_detail, update_book_note, delete_book_note, get_public_book_notes, get_personalized_book_content, get_all_user_notes, get_user_notes_statistics
+
 urlpatterns = [
     path('', views.home, name='home'),
 
-    # ===== Auth (giữ nguyên) =====
+    # ===== Auth =====
     path('api/register/', views.RegisterView.as_view(), name='register'),
     path('api/login/', views.LoginView.as_view(), name='login'),
     path('api/logout/', views.LogoutView.as_view(), name='logout'),
     path('api/forgot-password/', views.ForgotPasswordView.as_view(), name='forgot_password'),
     path('api/reset-password/', views.ResetPasswordView.as_view(), name='reset_password'),
 
-    # ===== Book APIs (khớp views hiện tại) =====
+    # ===== Book APIs =====
     path('api/search-books/', views.search_books, name='search-books'),
     path('api/books/', views.all_books, name='all_books'),
     path('api/books/<int:book_id>/', views.book_detail_view, name='book_detail_view'),
@@ -40,10 +41,8 @@ urlpatterns = [
     path('api/admin_dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('api/rating-statistics/', views.rating_statistics, name='rating-statistics'),
     path('api/report-statistics/', views.report_statistics, name='report_statistics'),
-
     path('api/user-roles-statistics/', views.user_roles_statistics, name='user-roles-statistics'),
     path('api/books/total/', views.total_books, name='total-books'),
-
 
     # ===== Admin lists + CRUD users =====
     path('api/admin/users/', views.list_users, name='list_users'),
@@ -62,20 +61,21 @@ urlpatterns = [
     path('api/approve-user-book/<int:user_book_id>/', views.ApproveUserBookView.as_view(), name='approve-user-book'),
     path('api/reject-delete-book/<int:book_id>/', views.RejectAndDeleteBookView.as_view(), name='reject-delete-book'),
     path('api/list-approved-books/', views.ListApprovedBooksView.as_view(), name='list-approved-books'),
+
     # ===== Chatbot endpoints =====
-    path("chat/send", chat_send),
-    path("chat/conversations", conversations_list),
-    path("chat/conversations/<uuid:conversation_id>/messages", conversation_messages),
-    path("chat/conversations/<uuid:conversation_id>/end", conversation_end),
+    path("chat/send", chat_send, name='chat_send'),
+    path("chat/conversations", conversations_list, name='conversations_list'),
+    path("chat/conversations/<uuid:conversation_id>/messages", conversation_messages, name='conversation_messages'),
+    path("chat/conversations/<uuid:conversation_id>/end", conversation_end, name='conversation_end'),
     
-       # ================= BOOK NOTES APIs =================
+    # ================= BOOK NOTES APIs =================
     
     # --- Create & List Notes ---
     path('api/books/<int:book_id>/notes/', get_user_book_notes, name='get_user_book_notes'),
     path('api/books/<int:book_id>/notes/create/', create_book_note, name='create_book_note'),
     
     # --- Single Note Operations ---
-    path('api/books/<int:book_id>/notes/<int:note_id>/',get_note_detail, name='get_note_detail'),
+    path('api/books/<int:book_id>/notes/<int:note_id>/', get_note_detail, name='get_note_detail'),
     path('api/books/<int:book_id>/notes/<int:note_id>/update/', update_book_note, name='update_book_note'),
     path('api/books/<int:book_id>/notes/<int:note_id>/delete/', delete_book_note, name='delete_book_note'),
     
@@ -88,5 +88,4 @@ urlpatterns = [
     # --- User Notes Management ---
     path('api/my-notes/', get_all_user_notes, name='get_all_user_notes'),
     path('api/my-notes/stats/', get_user_notes_statistics, name='get_user_notes_statistics'),
-    
 ]

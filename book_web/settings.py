@@ -38,6 +38,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
 
 ALLOWED_HOSTS = []
 
+# Disable automatic slash appending to match URL patterns exactly
+APPEND_SLASH = False
+
 
 # Application definition
 
@@ -57,20 +60,21 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    
-    'corsheaders.middleware.CorsMiddleware',
+    # 'django.middleware.clickjacking.XFrameOptionsMiddleware',  # Commented to allow PDF iframe
+]
 
-]
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',  # URL của React FE
+    'http://localhost:5173',  # URL của React FE
 ]
+
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 ROOT_URLCONF = 'book_web.urls'
 MEDIA_URL = '/media/'  # URL để truy cập file media
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # Thư mục thực tế để lưu file media
