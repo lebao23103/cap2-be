@@ -57,6 +57,8 @@ class ReadingHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reading_history')
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='history')
     read_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    page_number = models.IntegerField(default=1)
     def __str__(self): return f"{self.user.username} read {self.book.title}"
 
 
