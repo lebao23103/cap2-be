@@ -466,7 +466,8 @@ def delete_user(request, user_id):
     return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
 # ================= CRUD books =================
-api_view(['PUT'])  # hoặc ['PATCH'] nếu muốn cập nhật từng phần
+@api_view(['PUT'])  # hoặc ['PATCH'] nếu muốn cập nhật từng phần
+@permission_classes([IsAdminUser])
 def edit_book_fields(request, pk):
     """
     Cập nhật các trường hợp lệ của Book theo schema mới:
