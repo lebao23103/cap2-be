@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/favorites/remove_from_favorites/', views.remove_from_favorites, name='remove_from_favorites'),
     path('api/reading-history/add/', views.add_to_reading_history, name="add_to_reading_history"),
     path('api/reading-history/', views.get_reading_history, name="reading-history"),
+    path('api/reading-history/<int:book_id>/update/', views.update_reading_progress, name="update_reading_progress"),
 
     # ===== Admin dashboard & stats =====
     path('api/admin_dashboard/', views.admin_dashboard, name='admin_dashboard'),

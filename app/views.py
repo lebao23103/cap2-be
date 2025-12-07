@@ -267,14 +267,37 @@ def add_to_reading_history(request):
     if not book_id: return Response({"error": "Book ID is required"}, status=400)
     try: book = Book.objects.get(id=book_id)
     except Book.DoesNotExist: return Response({"error": "Book not found"}, status=404)
-    ReadingHistory.objects.create(user=request.user, book=book)
+    ReadingHistory.objects.get_or_create(user=request.user, book=book)
     return Response({"message": "Book added to reading history"}, status=201)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_reading_history(request):
-    history = ReadingHistory.objects.filter(user=request.user).order_by('-read_at')
+    history = ReadingHistory.objects.filter(user=request.user).order_by('-updated_at')
     return Response(ReadingHistorySerializer(history, many=True).data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_reading_progress(request, book_id):
+    """
+    Cập nhật page_number cho sách trong ReadingHistory.
+    Nếu chưa có, tạo mới.
+    """
+    page = request.data.get('page_number', 1)
+    book = get_object_or_404(Book, id=book_id)
+    
+    # Tìm lịch sử gần nhất hoặc tạo mới
+    history, created = ReadingHistory.objects.get_or_create(
+        user=request.user, 
+        book=book,
+        defaults={'page_number': page}
+    )
+    
+    if not created:
+        history.page_number = page
+        history.save() # Auto updates updated_at
+        
+    return Response({'message': 'Progress updated', 'page_number': history.page_number}, status=200)
 
 # ================= ADMIN LISTS =================
 @api_view(['GET'])

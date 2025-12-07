@@ -102,7 +102,7 @@ class ReadingHistorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ReadingHistory
-        fields = ['id', 'book_id', 'book_title', 'book_author', 'book_cover', 'read_at']
+        fields = ['id', 'book_id', 'book_title', 'book_author', 'book_cover', 'read_at', 'updated_at', 'page_number']
 
 
 # ===== Auth helper serializers (giữ nguyên) =====
