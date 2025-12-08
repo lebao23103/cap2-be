@@ -472,11 +472,13 @@ def update_user(request, user_id):
     data = request.data
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
+    if 'is_staff' in data:
+        user.is_staff = data['is_staff']
     if 'password' in data and data['password']:
         user.set_password(data['password'])
     user.save()
 
-    return Response({"id": user.id, "username": user.username, "email": user.email},
+    return Response({"id": user.id, "username": user.username, "email": user.email, "is_staff": user.is_staff},
                     status=status.HTTP_200_OK)
 
 @api_view(['DELETE'])
