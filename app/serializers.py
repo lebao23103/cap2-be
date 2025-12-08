@@ -99,10 +99,11 @@ class ReadingHistorySerializer(serializers.ModelSerializer):
     book_title = serializers.CharField(source='book.title', read_only=True)
     book_author = serializers.CharField(source='book.author', read_only=True)
     book_cover = serializers.ImageField(source='book.cover_image', read_only=True)
+    book_pages = serializers.IntegerField(source='book.pages', read_only=True)
 
     class Meta:
         model = ReadingHistory
-        fields = ['id', 'book_id', 'book_title', 'book_author', 'book_cover', 'read_at', 'updated_at', 'page_number']
+        fields = ['id', 'book_id', 'book_title', 'book_author', 'book_cover', 'book_pages', 'read_at', 'updated_at', 'created_at', 'page_number']
 
 
 # ===== Auth helper serializers (giữ nguyên) =====
