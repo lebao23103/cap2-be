@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework.serializers import Serializer, CharField
 
 from .models import (
-    Book, Review, FavoriteBook, ReadingHistory, UserBook,BookNote
+    Book, Review, FavoriteBook, ReadingHistory, UserBook, BookNote, Question, QuizSession, UserAnswer
 )
 import re
 
@@ -177,4 +177,111 @@ class BookNoteListSerializer(serializers.ModelSerializer):
             'color',
             'is_public',
             'created_at',
+        ]
+
+
+# ================= Question Serializer =================
+class QuestionSerializer(serializers.ModelSerializer):
+    """
+    Serializer cho model Question - dùng cho CRUD operations
+    """
+    class Meta:
+        model = Question
+        fields = [
+            'id',
+            'book',
+            'question_text',
+            'choice_a',
+            'choice_b',
+            'choice_c',
+            'choice_d',
+            'correct_answer',
+            'explanation',
+            'order_num',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class QuestionListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer cho list view
+    """
+    class Meta:
+        model = Question
+        fields = [
+            'id',
+            'question_text',
+            'choice_a',
+            'choice_b',
+            'choice_c',
+            'choice_d',
+            'correct_answer',
+            'explanation',
+            'order_num',
+        ]
+
+
+# ================= Quiz Session Serializer =================
+class UserAnswerSerializer(serializers.ModelSerializer):
+    """
+    Serializer cho câu trả lời của user
+    """
+    question_text = serializers.CharField(source='question.question_text', read_only=True)
+    correct_answer = serializers.CharField(source='question.correct_answer', read_only=True)
+    
+    class Meta:
+        model = UserAnswer
+        fields = [
+            'id',
+            'question',
+            'question_text',
+            'selected_answer',
+            'correct_answer',
+            'is_correct',
+            'answered_at',
+        ]
+
+
+class QuizSessionSerializer(serializers.ModelSerializer):
+    """
+    Serializer cho phiên làm quiz
+    """
+    user_answers = UserAnswerSerializer(many=True, read_only=True)
+    book_title = serializers.CharField(source='book.title', read_only=True)
+    
+    class Meta:
+        model = QuizSession
+        fields = [
+            'id',
+            'user',
+            'book',
+            'book_title',
+            'score',
+            'total_questions',
+            'completed',
+            'started_at',
+            'completed_at',
+            'user_answers',
+        ]
+
+
+class QuizSessionListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer cho danh sách phiên làm quiz
+    """
+    book_title = serializers.CharField(source='book.title', read_only=True)
+    
+    class Meta:
+        model = QuizSession
+        fields = [
+            'id',
+            'book',
+            'book_title',
+            'score',
+            'total_questions',
+            'completed',
+            'started_at',
+            'completed_at',
         ]

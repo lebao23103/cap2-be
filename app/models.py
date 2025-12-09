@@ -160,3 +160,78 @@ class BookNote(models.Model):
 
     def __str__(self):
         return f"Note by {self.user.username} on {self.book.title}"
+
+
+class Question(models.Model):
+    """
+    Model để lưu trữ các câu hỏi trắc nghiệm cho sách
+    """
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='questions')
+    question_text = models.TextField(help_text="Nội dung câu hỏi")
+    choice_a = models.TextField(help_text="Đáp án A")
+    choice_b = models.TextField(help_text="Đáp án B")
+    choice_c = models.TextField(help_text="Đáp án C")
+    choice_d = models.TextField(help_text="Đáp án D")
+    correct_answer = models.CharField(max_length=1, help_text="Đáp án đúng (A, B, C, D)")
+    explanation = models.TextField(help_text="Giải thích/mô tả đáp án đúng", blank=True, null=True)
+    order_num = models.IntegerField(help_text="Thứ tự câu hỏi trong sách/quiz")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+    class Meta:
+        ordering = ['order_num']
+        indexes = [
+            models.Index(fields=['book', 'order_num']),
+        ]
+
+    def __str__(self):
+        return f"Question {self.order_num} for {self.book.title}"
+
+
+class QuizSession(models.Model):
+    """
+    Model để lưu trữ phiên làm quiz của user
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_sessions')
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='quiz_sessions')
+    score = models.IntegerField(null=True, blank=True, help_text="Số câu đúng")
+    total_questions = models.IntegerField(help_text="Tổng số câu hỏi")
+    completed = models.BooleanField(default=False, help_text="Quiz đã hoàn thành chưa")
+    
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['user', 'book']),
+            models.Index(fields=['completed']),
+        ]
+
+    def __str__(self):
+        status = "Completed" if self.completed else "In Progress"
+        return f"Quiz Session for {self.book.title} - {status}"
+
+
+class UserAnswer(models.Model):
+    """
+    Model để lưu trữ câu trả lời của user cho từng câu hỏi trong quiz
+    """
+    quiz_session = models.ForeignKey(QuizSession, on_delete=models.CASCADE, related_name='user_answers')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='user_answers')
+    selected_answer = models.CharField(max_length=1, help_text="Đáp án user chọn (A, B, C, D)")
+    is_correct = models.BooleanField(help_text="Đáp án đúng hay sai")
+    
+    answered_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['quiz_session', 'question']
+        indexes = [
+            models.Index(fields=['quiz_session']),
+            models.Index(fields=['is_correct']),
+        ]
+
+    def __str__(self):
+        return f"Answer for Question {self.question.id}: {self.selected_answer} ({'Correct' if self.is_correct else 'Incorrect'})"
