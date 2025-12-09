@@ -567,36 +567,62 @@ def delete_question(request, question_id):
 @permission_classes([IsAuthenticated])
 def start_quiz(request, book_id):
     """
-    Bắt đầu một phiên làm quiz cho một cuốn sách
+    Bắt đầu một phiên làm quiz cho một cuốn sách.
+    Trả về:
+    - thông tin phiên quiz (session)
+    - danh sách câu hỏi để làm bài
     """
     book = get_object_or_404(Book, id=book_id)
-    questions = Question.objects.filter(book=book)
-    
+    questions = Question.objects.filter(book=book).order_by('order_num')
+
     if not questions.exists():
-        return Response({"error": "No questions available for this book"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Tạo phiên làm quiz mới
+        return Response(
+            {"error": "No questions available for this book"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     quiz_session = QuizSession.objects.create(
         user=request.user,
         book=book,
         total_questions=questions.count()
     )
-    
-    serializer = QuizSessionSerializer(quiz_session)
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    session_data = QuizSessionSerializer(quiz_session).data
+    questions_data = QuestionListSerializer(questions, many=True).data
+
+    return Response(
+        {
+            "session": session_data,
+            "questions": questions_data,
+        },
+        status=status.HTTP_201_CREATED
+    )
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_quiz_session(request, session_id):
     """
-    Lấy thông tin chi tiết của một phiên làm quiz
+    Lấy thông tin chi tiết của một phiên làm quiz:
+    - thông tin session (score, completed, ...)
+    - danh sách câu hỏi của book
+    - các câu trả lời đã nộp (user_answers)
     """
     quiz_session = get_object_or_404(QuizSession, id=session_id, user=request.user)
-    serializer = QuizSessionSerializer(quiz_session)
-    return Response(serializer.data, status=status.HTTP_200_OK)
 
+    # Lấy tất cả câu hỏi của cuốn sách này
+    questions = Question.objects.filter(book=quiz_session.book).order_by('order_num')
 
+    session_data = QuizSessionSerializer(quiz_session).data
+    questions_data = QuestionListSerializer(questions, many=True).data
+
+    return Response(
+        {
+            "session": session_data,
+            "questions": questions_data,
+        },
+        status=status.HTTP_200_OK
+    )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_user_quiz_sessions(request):
