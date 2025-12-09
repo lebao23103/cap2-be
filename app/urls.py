@@ -3,6 +3,7 @@ from django.urls import path
 from . import views
 from .chatbot_view import chat_send, conversations_list, conversation_messages, conversation_end
 from .booknote_view import create_book_note, get_user_book_notes, get_note_detail, update_book_note, delete_book_note, get_public_book_notes, get_personalized_book_content, get_all_user_notes, get_user_notes_statistics
+from .views import test_pdf_notes_view
 urlpatterns = [
     path('', views.home, name='home'),
     path('books/<int:book_id>/test-notes/', test_pdf_notes_view, name='test-pdf-notes'),
