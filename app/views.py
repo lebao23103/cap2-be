@@ -317,6 +317,7 @@ def list_books(request):
         'id': b.id, 'title': b.title, 'author': b.author,
         'pdf_url': (request.build_absolute_uri(b.pdf_file.url) if b.pdf_file else None),
         'pages': b.pages,
+        'cover_image': (request.build_absolute_uri(b.cover_image.url) if b.cover_image else None),
     } for b in books]
     return Response(data)
 # --- STATS: users ---
@@ -335,9 +336,12 @@ def rating_statistics(request):
 @api_view(['GET'])
 # @permission_classes([IsAdminUser])  # Bật nếu muốn chỉ admin xem
 def report_statistics(request):
+    # Basic Counts
     total_books = Book.objects.count()
     total_reads = ReadingHistory.objects.count()
+    total_users = User.objects.count()
 
+    # Most Read Book
     most = (
         ReadingHistory.objects
         .values('book')
@@ -358,9 +362,31 @@ def report_statistics(request):
         except Book.DoesNotExist:
             most_read_book = None
 
-    total_users = User.objects.count()
+    # Reviews & Ratings
     stats = Review.objects.aggregate(total=Count('id'), avg=Avg('rating'))
     average_rating = round(stats['avg'] or 0, 2)
+
+    # 1. Rating Distribution for Bar Chart
+    # Returns list like: [{'rating': 5, 'count': 10}, {'rating': 4, 'count': 5}, ...]
+    rating_dist_query = (
+        Review.objects
+        .values('rating')
+        .annotate(count=Count('id'))
+        .order_by('rating')
+    )
+    # Convert to standard dictionary {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    rating_distribution = {i: 0 for i in range(1, 6)}
+    for r in rating_dist_query:
+        rating_distribution[r['rating']] = r['count']
+
+    # 2. User Roles for Pie Chart
+    # Standard query counting staff vs non-staff
+    staff_count = User.objects.filter(is_staff=True).count()
+    user_count = total_users - staff_count
+    user_roles = {
+        "admin": staff_count,
+        "user": user_count
+    }
 
     return Response({
         "total_books": total_books,
@@ -369,6 +395,8 @@ def report_statistics(request):
         "total_users": total_users,
         "total_reviews": stats['total'] or 0,
         "average_rating": average_rating,
+        "rating_distribution": rating_distribution,
+        "user_roles": user_roles
     })
 
 @api_view(['GET'])
@@ -520,6 +548,29 @@ def edit_book_fields(request, pk):
         return Response({"error": f"Failed to update book: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response(BookSerializer(book).data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def create_book(request):
+    """
+    Tạo mới một cuốn sách (Admin only)
+    """
+    try:
+        title = request.data.get('title')
+        if not title:
+            return Response({"error": "Title is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        book = Book.objects.create(
+            title=title,
+            author=request.data.get('author'),
+            pages=request.data.get('pages'),
+            pdf_file=request.FILES.get('pdf_file'),
+            cover_image=request.FILES.get('cover_image')
+        )
+        return Response(BookSerializer(book).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['DELETE'])

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework.serializers import Serializer, CharField
+from django.contrib.auth.models import User
 
 from .models import (
     Book, Review, FavoriteBook, ReadingHistory, UserBook, BookNote, Question, QuizSession, UserAnswer
@@ -50,7 +51,13 @@ class BookSerializer(serializers.ModelSerializer):
 
 
 # ===== UserBook (sách do user tạo) =====
+class UserMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email']
+
 class UserBookSerializer(serializers.ModelSerializer):
+    user = UserMiniSerializer(read_only=True)
     pdf_file = serializers.FileField(required=False, allow_null=True)
 
     class Meta:

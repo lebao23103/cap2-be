@@ -53,6 +53,7 @@ urlpatterns = [
     path('api/admin/users/<int:user_id>/delete/', views.delete_user, name='delete_user'),
 
     # ===== Book edit/delete =====
+    path('api/books/create/', views.create_book, name='create_book'), # Changed from admin/books/create to keep consistent, or stick to admin path
     path('api/books/<int:pk>/edit/', views.edit_book_fields, name='edit-book-fields'),
     path('api/books/<int:book_id>/delete/', views.delete_book, name='delete_book'),
 
