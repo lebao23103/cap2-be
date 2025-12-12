@@ -306,7 +306,7 @@ def update_reading_progress(request, book_id):
 @permission_classes([IsAdminUser])
 def list_users(request):
     users = User.objects.all()
-    data = [{'id': u.id, 'username': u.username, 'email': u.email, 'is_staff': u.is_staff} for u in users]
+    data = [{'id': u.id, 'username': u.username, 'email': u.email, 'is_staff': u.is_staff, 'is_superuser': u.is_superuser} for u in users]
     return Response(data)
 
 @api_view(['GET'])
@@ -492,12 +492,28 @@ def create_user(request):
     return Response({"id": user.id, "username": user.username, "email": user.email},
                     status=status.HTTP_201_CREATED)
 
+# Hardcoded Root Admins (Trusted List) - moved to Backend for security
+ROOT_ADMINS = ['tranbach@gmail.com', 'giabao']
+
 @api_view(['PUT'])
 @permission_classes([IsAdminUser])
 def update_user(request, user_id):
     user = User.objects.filter(id=user_id).first()
     if not user:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # SECURITY CHECKS
+    # 1. Protect Root Admins from being modified by ANYONE via API
+    if user.username in ROOT_ADMINS or user.email in ROOT_ADMINS:
+        return Response({"error": "Permission Denied: Cannot modify a Root Admin."}, status=status.HTTP_403_FORBIDDEN)
+
+    # 2. Hierarchy: If target is Superuser, only Root Admin can modify them
+    if user.is_superuser:
+         # Check if requester is Root
+         requester_email = request.user.email
+         requester_username = request.user.username
+         if requester_email not in ROOT_ADMINS and requester_username not in ROOT_ADMINS:
+             return Response({"error": "Permission Denied: Only Root Admins can modify other Superusers."}, status=status.HTTP_403_FORBIDDEN)
 
     data = request.data
     user.username = data.get('username', user.username)
@@ -517,6 +533,19 @@ def delete_user(request, user_id):
     user = User.objects.filter(id=user_id).first()
     if not user:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # SECURITY CHECKS
+    # 1. Protect Root Admins
+    if user.username in ROOT_ADMINS or user.email in ROOT_ADMINS:
+        return Response({"error": "Permission Denied: Cannot delete a Root Admin."}, status=status.HTTP_403_FORBIDDEN)
+    
+    # 2. Protect Superusers
+    if user.is_superuser:
+         requester_email = request.user.email
+         requester_username = request.user.username
+         if requester_email not in ROOT_ADMINS and requester_username not in ROOT_ADMINS:
+             return Response({"error": "Permission Denied: Only Root Admins can delete Superusers."}, status=status.HTTP_403_FORBIDDEN)
+
     user.delete()
     return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
