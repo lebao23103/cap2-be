@@ -7,6 +7,8 @@ from django.core.cache import cache
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
+from datetime import timedelta
+from django.db.models.functions import TruncDate
 from django.shortcuts import render, get_object_or_404
 from rest_framework import status, permissions, views
 from rest_framework.decorators import api_view, permission_classes
@@ -15,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Book, FavoriteBook, ReadingHistory, UserBook, Review, Question, QuizSession, UserAnswer
+from .models import Book, FavoriteBook, ReadingHistory, UserBook, Review, Question, QuizSession, UserAnswer, BookNote, NoteInteraction
 from .serializers import (
     BookSerializer, ReviewSerializer, FavoriteBookSerializer,
     ReadingHistorySerializer, ResetPasswordSerializer, ChangePasswordSerializer,
@@ -812,3 +814,123 @@ def complete_quiz(request, session_id):
 def test_pdf_notes_view(request, book_id):
     book = get_object_or_404(Book, id=book_id)
     return render(request, "test_pdf_notes.html", {"book": book})
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def get_daily_stats(request):
+    """
+    Returns aggregated stats for the last 14 days:
+    - New Users
+    - New Books
+    - Interactions (Votes)
+    """
+    days = 14
+    end_date = timezone.now().date()
+    start_date = end_date - timedelta(days=days-1)
+
+    # 1. New Users per day
+    users_data = (
+        User.objects.filter(date_joined__date__gte=start_date)
+        .annotate(date=TruncDate('date_joined'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+    users_dict = {str(item['date']): item['count'] for item in users_data}
+
+    # 2. New Books per day (using created_at from UserBook)
+    books_data = (
+        UserBook.objects.filter(created_at__date__gte=start_date)
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+    books_dict = {str(item['date']): item['count'] for item in books_data}
+
+    # 3. Interactions per day
+    interactions_data = (
+        NoteInteraction.objects.filter(created_at__date__gte=start_date)
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+    interactions_dict = {str(item['date']): item['count'] for item in interactions_data}
+
+    # Merge into a list of 14 days
+    result = []
+    for i in range(days):
+        current_date = start_date + timedelta(days=i)
+        date_str = str(current_date)
+        result.append({
+            'date': current_date.strftime('%Y-%m-%d'),
+            'new_users': users_dict.get(date_str, 0),
+            'new_books': books_dict.get(date_str, 0),
+            'interactions': interactions_dict.get(date_str, 0),
+        })
+
+    return Response(result)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def get_system_activity(request):
+    """
+    Aggegrates recent system activity:
+    - User Joins
+    - Book Submissions
+    - Reviews
+    - Flagged Notes (Awful interactions)
+    Returns sorted list by timestamp desc.
+    """
+    limit = 10
+    activity_log = []
+
+    # 1. New Users
+    users = User.objects.order_by('-date_joined')[:limit]
+    for u in users:
+        activity_log.append({
+            'type': 'user_join',
+            'timestamp': u.date_joined,
+            'message': f"New user joined: {u.username}",
+            'user': u.username
+        })
+
+    # 2. Book Submissions
+    books = UserBook.objects.order_by('-created_at')[:limit]
+    for b in books:
+        activity_log.append({
+            'type': 'book_submit',
+            'timestamp': b.created_at,
+            'message': f"Book submitted: {b.title}",
+            'user': b.user.username if b.user else 'Unknown',
+            'details': {'title': b.title, 'status': 'Pending' if not b.is_approved else 'Approved'}
+        })
+
+    # 3. Reviews
+    reviews = Review.objects.order_by('-created_at')[:limit]
+    for r in reviews:
+        activity_log.append({
+            'type': 'review',
+            'timestamp': r.created_at,
+            'message': f"Review on {r.book.title}",
+            'user': r.user.username,
+            'details': {'rating': r.rating, 'book': r.book.title}
+        })
+
+    # 4. Flagged Notes (Interactions where type='awful')
+    flags = NoteInteraction.objects.filter(interaction_type='awful').order_by('-created_at')[:limit]
+    for f in flags:
+        activity_log.append({
+            'type': 'flag',
+            'timestamp': f.created_at,
+            'message': f"Flagged note on {f.note.book.title}",
+            'user': f.user.username,
+            'details': {'book': f.note.book.title}
+        })
+
+    # Sort by timestamp desc
+    activity_log.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    # Return top 50 mixed events
+    return Response(activity_log[:50])

@@ -1,6 +1,6 @@
 # ================= BOOK NOTES APIs =================
 from django.shortcuts import get_object_or_404
-from django.db.models import  Count
+from django.db.models import Count, Q
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 
@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Book,BookNote
+from .models import Book, BookNote, NoteInteraction
 from .serializers import (
     BookSerializer, BookNoteSerializer, BookNoteListSerializer
 )
@@ -105,7 +105,8 @@ def get_personalized_book_content(request, book_id):
 def get_public_book_notes(request, book_id):
     """Lấy tất cả notes công khai (is_public=True) của users khác cho một cuốn sách"""
     book = get_object_or_404(Book, id=book_id)
-    notes = BookNote.objects.filter(book=book, is_public=True).order_by('page_number', 'position_start')
+    # MODERATION: Only show visible notes
+    notes = BookNote.objects.filter(book=book, is_public=True, status='visible').order_by('page_number', 'position_start')
     
     serializer = BookNoteListSerializer(notes, many=True)
     return Response({
@@ -163,5 +164,123 @@ def get_user_notes_statistics(request):
         "books_with_notes": books_with_notes,
         "most_noted_book": most_noted_book_info,
         "public_notes_count": notes.filter(is_public=True).count(),
-        "private_notes_count": notes.filter(is_public=False).count()
+        "private_notes_count": notes.filter(is_public=False).count(),
+        # Add moderation stats if useful for user profile? No, internal only.
     }, status=status.HTTP_200_OK)
+
+
+# ================= MODERATION APIs =================
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def vote_note(request, note_id):
+    """
+    Vote Helpful/Awful for a note.
+    Auto-hides note if awful_count >= 5.
+    """
+    note = get_object_or_404(BookNote, id=note_id)
+    user = request.user
+    vote_type = request.data.get('type')  # 'helpful' or 'awful'
+
+    if vote_type not in ['helpful', 'awful']:
+        return Response({"error": "Invalid vote type"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check existing interaction
+    interaction = NoteInteraction.objects.filter(user=user, note=note).first()
+    
+    # Simple logic: Toggle if same, Switch if different
+    if interaction:
+        if interaction.interaction_type == vote_type:
+            # Same vote -> Remove it (Toggle off)
+            interaction.delete()
+            if vote_type == 'helpful':
+                note.helpful_count = max(0, note.helpful_count - 1)
+            else:
+                note.awful_count = max(0, note.awful_count - 1)
+        else:
+            # Different vote -> Switch
+            old_type = interaction.interaction_type
+            interaction.interaction_type = vote_type
+            interaction.save()
+            
+            # Update counts
+            if old_type == 'helpful':
+                note.helpful_count = max(0, note.helpful_count - 1)
+                note.awful_count += 1
+            else:
+                note.awful_count = max(0, note.awful_count - 1)
+                note.helpful_count += 1
+    else:
+        # New vote
+        NoteInteraction.objects.create(user=user, note=note, interaction_type=vote_type)
+        if vote_type == 'helpful':
+            note.helpful_count += 1
+        else:
+            note.awful_count += 1
+
+    # AUTO-MODERATION RULE: Threshold = 5
+    if note.awful_count >= 5:
+        note.status = 'hidden'
+    
+    note.save()
+
+    return Response({
+        "helpful_count": note.helpful_count,
+        "awful_count": note.awful_count,
+        "status": note.status,
+        "user_vote": vote_type if (not interaction or interaction.interaction_type != vote_type) else None # Returns current state
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def get_flagged_notes(request):
+    """
+    Admin API to get flagged/hidden notes.
+    """
+    # Get hidden notes OR notes with any awful votes, sorted by most awful first
+    flagged_notes = BookNote.objects.filter(
+        Q(status='hidden') | Q(awful_count__gt=0)
+    ).order_by('status', '-awful_count') # 'hidden' comes before 'visible' alphabetically? No, h < v. So hidden first.
+
+    # Manual serialization for custom admin view
+    data = []
+    for note in flagged_notes:
+        data.append({
+            "id": note.id,
+            "content": note.note_content,
+            "book_title": note.book.title,
+            "user": note.user.username,
+            "status": note.status,
+            "helpful_count": note.helpful_count,
+            "awful_count": note.awful_count,
+            "created_at": note.created_at
+        })
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def moderate_note(request, note_id):
+    """
+    Admin action: Restore or Delete.
+    """
+    note = get_object_or_404(BookNote, id=note_id)
+    action = request.data.get('action') # 'restore' or 'delete'
+
+    if action == 'restore':
+        note.status = 'visible'
+        # Optional: Reset awful count? Let's NOT reset, history is important.
+        # But we must ensure it doesn't auto-hide immediately again next vote.
+        # Actually, if we keep awful_count >= 5, the next vote (helpful or awful) might trigger check.
+        # So we should probably reset awful_count or have an 'admin_approved' status.
+        # For simplicity MVP: Reset awful_count to 0.
+        note.awful_count = 0 
+        note.save()
+        return Response({"message": "Note restored and awful count reset"}, status=status.HTTP_200_OK)
+    elif action == 'delete':
+        note.delete() # Hard delete
+        return Response({"message": "Note permanently deleted"}, status=status.HTTP_200_OK)
+    
+    return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)

@@ -147,10 +147,13 @@ class BookNoteSerializer(serializers.ModelSerializer):
             'position_end',
             'color',
             'is_public',
+            'status',       # Moderator field
+            'helpful_count', # Moderator field
+            'awful_count',   # Moderator field
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['user', 'created_at', 'updated_at']
+        read_only_fields = ['user', 'created_at', 'updated_at', 'helpful_count', 'awful_count', 'status']
 
     def validate_color(self, value):
         """Validate hex color format"""
@@ -171,8 +174,8 @@ class BookNoteListSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer cho list view (GET /api/books/<id>/notes/)
     """
-    user_name = serializers.CharField(source='user.username', read_only=True)
-    
+    user_name = serializers.SerializerMethodField()
+
     class Meta:
         model = BookNote
         fields = [
@@ -183,8 +186,32 @@ class BookNoteListSerializer(serializers.ModelSerializer):
             'page_number',
             'color',
             'is_public',
+            'helpful_count', # Public stats
+            'awful_count',   # Public stats
             'created_at',
         ]
+
+    def get_user_name(self, obj):
+        """
+        Privacy: Prefer First Name, otherwise mask the username/email.
+        """
+        user = obj.user
+        fullname = f"{user.first_name} {user.last_name}".strip()
+        if fullname:
+            return fullname
+            
+        # Fallback to masked username if it looks like an email
+        username = user.username
+        if '@' in username:
+            try:
+                name_part = username.split('@')[0]
+                if len(name_part) > 3:
+                     return f"{name_part[:3]}***"
+                return "User***"
+            except:
+                return "Anonymous"
+        
+        return username
 
 
 # ================= Question Serializer =================

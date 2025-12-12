@@ -147,6 +147,12 @@ class BookNote(models.Model):
     # Public/Private
     is_public = models.BooleanField(default=False)
     
+    # Moderation Fields
+    STATUS_CHOICES = (('visible', 'Visible'), ('hidden', 'Hidden'), ('deleted', 'Deleted'))
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='visible')
+    helpful_count = models.IntegerField(default=0)
+    awful_count = models.IntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -155,11 +161,36 @@ class BookNote(models.Model):
             models.Index(fields=['user', 'book']),
             models.Index(fields=['book', 'is_public']),
             models.Index(fields=['page_number']),
+            models.Index(fields=['status']), # Index for filtering visible notes
+            models.Index(fields=['awful_count']), # Index for admin queue
         ]
         ordering = ['page_number', 'position_start']
 
     def __str__(self):
         return f"Note by {self.user.username} on {self.book.title}"
+
+
+class NoteInteraction(models.Model):
+    """
+    Lưu trữ tương tác (vote) của user với note.
+    Giúp đảm bảo mỗi user chỉ vote 1 lần và truy vết history.
+    """
+    INTERACTION_CHOICES = (('helpful', 'Helpful'), ('awful', 'Awful'))
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='note_interactions')
+    note = models.ForeignKey(BookNote, on_delete=models.CASCADE, related_name='interactions')
+    interaction_type = models.CharField(max_length=10, choices=INTERACTION_CHOICES)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'note') # Mỗi user chỉ interact 1 lần với 1 note
+        indexes = [
+            models.Index(fields=['note', 'interaction_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} voted {self.interaction_type} on Note {self.note.id}"
 
 
 class Question(models.Model):

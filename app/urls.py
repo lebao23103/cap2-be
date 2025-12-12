@@ -2,7 +2,7 @@
 from django.urls import path
 from . import views
 from .chatbot_view import chat_send, conversations_list, conversation_messages, conversation_end
-from .booknote_view import create_book_note, get_user_book_notes, get_note_detail, update_book_note, delete_book_note, get_public_book_notes, get_personalized_book_content, get_all_user_notes, get_user_notes_statistics
+from .booknote_view import create_book_note, get_user_book_notes, get_note_detail, update_book_note, delete_book_note, get_public_book_notes, get_personalized_book_content, get_all_user_notes, get_user_notes_statistics, vote_note, get_flagged_notes, moderate_note
 from .views import test_pdf_notes_view
 urlpatterns = [
     path('', views.home, name='home'),
@@ -44,6 +44,8 @@ urlpatterns = [
     path('api/report-statistics/', views.report_statistics, name='report_statistics'),
     path('api/user-roles-statistics/', views.user_roles_statistics, name='user-roles-statistics'),
     path('api/books/total/', views.total_books, name='total-books'),
+    path('api/admin/stats/daily/', views.get_daily_stats, name='get_daily_stats'),
+    path('api/admin/system-activity/', views.get_system_activity, name='get_system_activity'),
 
     # ===== Admin lists + CRUD users =====
     path('api/admin/users/', views.list_users, name='list_users'),
@@ -51,6 +53,10 @@ urlpatterns = [
     path('api/admin/users/create/', views.create_user, name='create_user'),
     path('api/admin/users/<int:user_id>/update/', views.update_user, name='update_user'),
     path('api/admin/users/<int:user_id>/delete/', views.delete_user, name='delete_user'),
+
+    # ===== Admin Moderation =====
+    path('api/admin/moderation/flagged/', get_flagged_notes, name='get_flagged_notes'),
+    path('api/admin/moderation/note/<int:note_id>/moderate/', moderate_note, name='moderate_note'),
 
     # ===== Book edit/delete =====
     path('api/books/create/', views.create_book, name='create_book'), # Changed from admin/books/create to keep consistent, or stick to admin path
@@ -80,6 +86,9 @@ urlpatterns = [
     path('api/books/<int:book_id>/notes/<int:note_id>/', get_note_detail, name='get_note_detail'),
     path('api/books/<int:book_id>/notes/<int:note_id>/update/', update_book_note, name='update_book_note'),
     path('api/books/<int:book_id>/notes/<int:note_id>/delete/', delete_book_note, name='delete_book_note'),
+
+    # Interaction
+    path('api/notes/<int:note_id>/vote/', vote_note, name='vote_note'),
     
     # --- Personalized Reading (Version 2) ---
     path('api/books/<int:book_id>/personalized/', get_personalized_book_content, name='get_personalized_book_content'),
