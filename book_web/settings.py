@@ -70,6 +70,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     # 'django.middleware.clickjacking.XFrameOptionsMiddleware',  # Commented to allow PDF iframe
+    'app.middleware.ActiveUserMiddleware',
 ]
 
 CORS_ALLOWED_ORIGINS = [

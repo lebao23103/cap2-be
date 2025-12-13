@@ -339,7 +339,8 @@ def list_users(request):
             'is_staff': u.is_staff,
             'is_superuser': u.is_superuser,
             'is_active': u.is_active,
-            'last_login': u.last_login
+            'last_login': u.last_login,
+            'is_online': bool(cache.get(f'seen_{u.id}'))
         })
     return Response(data)
 
