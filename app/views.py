@@ -43,10 +43,27 @@ class RegisterView(APIView):
         last_name = data.get('last_name', '')
         if password != confirm_password:
             return Response({'error': 'Passwords do not match!'}, status=status.HTTP_400_BAD_REQUEST)
-        if User.objects.filter(username=username).exists():
+        if User.objects.filter(email=username).exists():
             return Response({'error': 'Email already exists!'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate username from Name
+        base_name = f"{first_name}{last_name}".lower().replace(" ", "")
+        # Fallback to email prefix if no name provided
+        if not base_name:
+            base_name = username.split('@')[0]
+            
+        # Ensure alphanumeric-ish
+        import re
+        base_name = re.sub(r'[^a-z0-9]', '', base_name) or 'user'
+
+        final_username = base_name
+        counter = 1
+        while User.objects.filter(username=final_username).exists():
+            final_username = f"{base_name}{counter}"
+            counter += 1
+
         user = User.objects.create_user(
-            username=username, email=username, password=password,
+            username=final_username, email=username, password=password,
             first_name=first_name, last_name=last_name
         )
         return Response({'message': 'User registered successfully!'}, status=status.HTTP_201_CREATED)
