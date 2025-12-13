@@ -172,7 +172,9 @@ def book_content_by_id(request, book_id):
     return Response({
         'title': book.title,
         'author': book.author,
-        'pdf_url': request.build_absolute_uri(book.pdf_file.url),
+        # Trả về đường dẫn tương đối (ví dụ: /media/books/file.pdf)
+        # Frontend sẽ tự động nối với domain hiện tại
+        'pdf_url': book.pdf_file.url,
     })
 
 # ================= REVIEW =================
@@ -308,7 +310,20 @@ def update_reading_progress(request, book_id):
 @permission_classes([IsAdminUser])
 def list_users(request):
     users = User.objects.all()
-    data = [{'id': u.id, 'username': u.username, 'email': u.email, 'is_staff': u.is_staff, 'is_superuser': u.is_superuser} for u in users]
+    # Explicitly return fields for UI: Username, Name, Email, Status, Last Login
+    data = []
+    for u in users:
+        data.append({
+            'id': u.id,
+            'username': u.username,
+            'email': u.email,
+            'first_name': u.first_name,
+            'last_name': u.last_name,
+            'is_staff': u.is_staff,
+            'is_superuser': u.is_superuser,
+            'is_active': u.is_active,
+            'last_login': u.last_login
+        })
     return Response(data)
 
 @api_view(['GET'])
@@ -317,9 +332,9 @@ def list_books(request):
     books = Book.objects.all()
     data = [{
         'id': b.id, 'title': b.title, 'author': b.author,
-        'pdf_url': (request.build_absolute_uri(b.pdf_file.url) if b.pdf_file else None),
+        'pdf_url': (b.pdf_file.url if b.pdf_file else None),
         'pages': b.pages,
-        'cover_image': (request.build_absolute_uri(b.cover_image.url) if b.cover_image else None),
+        'cover_image': (b.cover_image.url if b.cover_image else None),
     } for b in books]
     return Response(data)
 # --- STATS: users ---
@@ -889,43 +904,52 @@ def get_system_activity(request):
     # 1. New Users
     users = User.objects.order_by('-date_joined')[:limit]
     for u in users:
+        full_name = f"{u.first_name} {u.last_name}".strip()
         activity_log.append({
             'type': 'user_join',
             'timestamp': u.date_joined,
             'message': f"New user joined: {u.username}",
-            'user': u.username
+            'user': u.username,
+            'full_name': full_name or None
         })
 
     # 2. Book Submissions
     books = UserBook.objects.order_by('-created_at')[:limit]
     for b in books:
+        u_name = b.user.username if b.user else 'Unknown'
+        f_name = f"{b.user.first_name} {b.user.last_name}".strip() if b.user else None
         activity_log.append({
             'type': 'book_submit',
             'timestamp': b.created_at,
             'message': f"Book submitted: {b.title}",
-            'user': b.user.username if b.user else 'Unknown',
+            'user': u_name,
+            'full_name': f_name or None,
             'details': {'title': b.title, 'status': 'Pending' if not b.is_approved else 'Approved'}
         })
 
     # 3. Reviews
     reviews = Review.objects.order_by('-created_at')[:limit]
     for r in reviews:
+        full_name = f"{r.user.first_name} {r.user.last_name}".strip()
         activity_log.append({
             'type': 'review',
             'timestamp': r.created_at,
             'message': f"Review on {r.book.title}",
             'user': r.user.username,
+            'full_name': full_name or None,
             'details': {'rating': r.rating, 'book': r.book.title}
         })
 
     # 4. Flagged Notes (Interactions where type='awful')
     flags = NoteInteraction.objects.filter(interaction_type='awful').order_by('-created_at')[:limit]
     for f in flags:
+        full_name = f"{f.user.first_name} {f.user.last_name}".strip()
         activity_log.append({
             'type': 'flag',
             'timestamp': f.created_at,
             'message': f"Flagged note on {f.note.book.title}",
             'user': f.user.username,
+            'full_name': full_name or None,
             'details': {'book': f.note.book.title}
         })
 

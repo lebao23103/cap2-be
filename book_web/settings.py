@@ -32,11 +32,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-&c_d7vk&@#urpyq#@_vq1ju@(4hn6&y-_rq&3p*+2!wbc#t!yr'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = False
 DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Disable automatic slash appending to match URL patterns exactly
 APPEND_SLASH = False
@@ -62,6 +63,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -71,8 +73,24 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',  # URL của React FE
+    'http://localhost:5173',
+    'http://localhost:4173',
+    'https://localhost:4173',
 ]
+
+# CHO PHÉP TẤT CẢ CÁC DOMAIN CỦA CLOUDFLARE
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.trycloudflare.com',
+    'http://*.trycloudflare.com',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173',
+]
+
+# Settings quan trọng để chạy qua Tunnel
+CSRF_COOKIE_SECURE = True  # Bắt buộc True vì Cloudflare chạy https
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SAMESITE = 'None'
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 ROOT_URLCONF = 'book_web.urls'
@@ -151,6 +169,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -158,7 +178,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # Cho phép mọi domain truy cập
+CORS_ALLOW_ALL_ORIGINS = True
 
 
 REST_FRAMEWORK = {

@@ -26,8 +26,10 @@ class ReviewSerializer(serializers.ModelSerializer):
 class BookSerializer(serializers.ModelSerializer):
     reviews = ReviewSerializer(many=True, read_only=True)
     average_rating = serializers.SerializerMethodField()
-    # DRF tự xử lý FileField -> URL nếu dùng DefaultStorage
-    pdf_file = serializers.FileField(required=False, allow_null=True)
+    
+    # Ép buộc trả về đường dẫn tương đối (Relative URL)
+    pdf_file = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Book
@@ -41,6 +43,16 @@ class BookSerializer(serializers.ModelSerializer):
             'reviews',
             'average_rating',
         ]
+        
+    def get_pdf_file(self, obj):
+        if obj.pdf_file:
+            return obj.pdf_file.url
+        return None
+
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            return obj.cover_image.url
+        return None
 
     def get_average_rating(self, obj):
         qs = obj.reviews.all()
