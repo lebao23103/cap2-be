@@ -68,6 +68,8 @@ class RegisterView(APIView):
         )
         return Response({'message': 'User registered successfully!'}, status=status.HTTP_201_CREATED)
 
+from django.contrib.auth.models import update_last_login
+
 class LoginView(APIView):
     def post(self, request):
         data = request.data
@@ -77,6 +79,9 @@ class LoginView(APIView):
             auth_user = authenticate(request, username=user.username, password=password)
             if auth_user is None:
                 return Response({'message': 'Invalid password!'}, status=status.HTTP_401_UNAUTHORIZED)
+
+            # Cập nhật last_login để không bị "Never seen"
+            update_last_login(None, auth_user)
 
             refresh = RefreshToken.for_user(auth_user)
             return Response({
