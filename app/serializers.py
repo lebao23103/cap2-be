@@ -7,9 +7,14 @@ from .models import (
 )
 import re
 
+class UserMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+
 # ===== Review =====
 class ReviewSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField(read_only=True)
+    user = UserMiniSerializer(read_only=True)
 
     class Meta:
         model = Review
@@ -63,10 +68,7 @@ class BookSerializer(serializers.ModelSerializer):
 
 
 # ===== UserBook (sách do user tạo) =====
-class UserMiniSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email']
+
 
 class UserBookSerializer(serializers.ModelSerializer):
     user = UserMiniSerializer(read_only=True)
