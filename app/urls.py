@@ -68,6 +68,7 @@ urlpatterns = [
     path('api/list-user-books/', views.ListUserBooksView.as_view(), name='list_user_books'),
     path('api/approve-user-book/<int:user_book_id>/', views.ApproveUserBookView.as_view(), name='approve-user-book'),
     path('api/reject-delete-book/<int:book_id>/', views.RejectAndDeleteBookView.as_view(), name='reject-delete-book'),
+    path('api/my-books/', views.ListMyBooksView.as_view(), name='list-my-books'),
     path('api/list-approved-books/', views.ListApprovedBooksView.as_view(), name='list-approved-books'),
 
     # ===== Chatbot endpoints =====

@@ -480,6 +480,12 @@ class ListUserBooksView(APIView):
         books = UserBook.objects.filter(is_approved=False)
         return Response(UserBookSerializer(books, many=True).data)
 
+class ListMyBooksView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        my_books = UserBook.objects.filter(user=request.user).order_by('-created_at')
+        return Response(UserBookSerializer(my_books, many=True).data)
+
 class ListApprovedBooksView(APIView):
     def get(self, request):
         approved = UserBook.objects.filter(is_approved=True)
@@ -646,16 +652,23 @@ def create_book(request):
 def delete_book(request, book_id):
     """
     Xoá sách và dọn file (cover/pdf) ra khỏi storage.
+    Đồng thời xoá UserBook tương ứng để tránh "Ghost Books".
     """
     book = get_object_or_404(Book, id=book_id)
     try:
-        # Xoá file vật lý (nếu có) trước
+        # 1. Clean up "Source" UserBook (Prevent Ghost Books)
+        # Tìm các UserBook đã approve có cùng tiêu đề -> Xoá luôn
+        UserBook.objects.filter(title=book.title, is_approved=True).delete()
+
+        # 2. Xoá file vật lý
         if book.cover_image:
             book.cover_image.delete(save=False)
         if book.pdf_file:
             book.pdf_file.delete(save=False)
+            
+        # 3. Xoá Public Book
         book.delete()
-        return Response({"message": "Book deleted successfully"}, status=status.HTTP_200_OK)
+        return Response({"message": "Book deleted successfully (including source uploads)"}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": f"Failed to delete book: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
