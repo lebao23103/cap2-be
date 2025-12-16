@@ -345,6 +345,7 @@ def list_users(request):
             'is_superuser': u.is_superuser,
             'is_active': u.is_active,
             'last_login': cache.get(f'seen_{u.id}') or u.last_login,
+            'date_joined': u.date_joined,
             'is_online': bool(cache.get(f'seen_{u.id}'))
         })
     return Response(data)
