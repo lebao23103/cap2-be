@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Book, FavoriteBook, ReadingHistory, UserBook, Review, Question, QuizSession, UserAnswer, BookNote, NoteInteraction
+from .models import Book, FavoriteBook, ReadingHistory, UserBook, Review, Question, QuizSession, UserAnswer, BookNote, NoteInteraction, NoteComment
 from .serializers import (
     BookSerializer, ReviewSerializer, FavoriteBookSerializer,
     ReadingHistorySerializer, ResetPasswordSerializer, ChangePasswordSerializer,
@@ -25,7 +25,7 @@ from .serializers import (
     QuizSessionSerializer, QuizSessionListSerializer, UserAnswerSerializer
 )
 
-import random, string
+import random, string, datetime
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -884,42 +884,35 @@ def get_daily_stats(request):
     - New Users
     - New Books
     - Interactions (Votes)
+    - New Comments (NEW)
+    - New Notes (NEW)
+    - New Reviews (NEW)
     """
     days = 14
     end_date = timezone.now().date()
     start_date = end_date - timedelta(days=days-1)
 
-    # 1. New Users per day
-    users_data = (
-        User.objects.filter(date_joined__date__gte=start_date)
-        .annotate(date=TruncDate('date_joined'))
-        .values('date')
-        .annotate(count=Count('id'))
-        .order_by('date')
-    )
-    users_dict = {str(item['date']): item['count'] for item in users_data}
+    def get_counts(model_class, date_field):
+        data = (
+            model_class.objects.filter(**{f"{date_field}__date__gte": start_date})
+            .annotate(date=TruncDate(date_field))
+            .values('date')
+            .annotate(count=Count('id'))
+            .order_by('date')
+        )
+        return {str(item['date']): item['count'] for item in data}
 
-    # 2. New Books per day (using created_at from UserBook)
-    books_data = (
-        UserBook.objects.filter(created_at__date__gte=start_date)
-        .annotate(date=TruncDate('created_at'))
-        .values('date')
-        .annotate(count=Count('id'))
-        .order_by('date')
-    )
-    books_dict = {str(item['date']): item['count'] for item in books_data}
+    # Gather data dicts
+    users_dict = get_counts(User, 'date_joined')
+    books_dict = get_counts(UserBook, 'created_at') # User submitted books
+    interactions_dict = get_counts(NoteInteraction, 'created_at')
+    
+    # NEW Data Points
+    comments_dict = get_counts(NoteComment, 'created_at')
+    notes_dict = get_counts(BookNote, 'created_at')
+    reviews_dict = get_counts(Review, 'created_at')
 
-    # 3. Interactions per day
-    interactions_data = (
-        NoteInteraction.objects.filter(created_at__date__gte=start_date)
-        .annotate(date=TruncDate('created_at'))
-        .values('date')
-        .annotate(count=Count('id'))
-        .order_by('date')
-    )
-    interactions_dict = {str(item['date']): item['count'] for item in interactions_data}
-
-    # Merge into a list of 14 days
+    # Merge into list
     result = []
     for i in range(days):
         current_date = start_date + timedelta(days=i)
@@ -929,9 +922,78 @@ def get_daily_stats(request):
             'new_users': users_dict.get(date_str, 0),
             'new_books': books_dict.get(date_str, 0),
             'interactions': interactions_dict.get(date_str, 0),
+            'new_comments': comments_dict.get(date_str, 0),
+            'new_notes': notes_dict.get(date_str, 0),
+            'new_reviews': reviews_dict.get(date_str, 0),
         })
 
     return Response(result)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def get_activity_by_date(request):
+    """
+    Drill-down: Get list of specific activities for a given date (YYYY-MM-DD).
+    Returns: { comments: [], notes: [], reviews: [], users: [] }
+    """
+    date_str = request.query_params.get('date')
+    if not date_str:
+        return Response({'error': 'Date parameter is required'}, status=400)
+    
+    try:
+        target_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return Response({'error': 'Invalid date format. Use YYYY-MM-DD'}, status=400)
+
+    # 1. Comments
+    comments = NoteComment.objects.filter(created_at__date=target_date).select_related('user', 'note__book')
+    comments_data = [{
+        'id': c.id,
+        'user': c.user.username,
+        'content': c.content,
+        'book': c.note.book.title,
+        'time': c.created_at.strftime('%H:%M')
+    } for c in comments]
+
+    # 2. Notes
+    notes = BookNote.objects.filter(created_at__date=target_date).select_related('user', 'book')
+    notes_data = [{
+        'id': n.id,
+        'user': n.user.username,
+        'note_content': n.note_content,
+        'selected_text': n.selected_text[:50] + '...' if len(n.selected_text or '') > 50 else n.selected_text,
+        'book': n.book.title,
+        'is_public': n.is_public,
+        'time': n.created_at.strftime('%H:%M')
+    } for n in notes]
+
+    # 3. Reviews
+    reviews = Review.objects.filter(created_at__date=target_date).select_related('user', 'book')
+    reviews_data = [{
+        'id': r.id,
+        'user': r.user.username,
+        'rating': r.rating,
+        'comment': r.comment,
+        'book': r.book.title,
+        'time': r.created_at.strftime('%H:%M')
+    } for r in reviews]
+
+    # 4. New Users
+    new_users = User.objects.filter(date_joined__date=target_date)
+    users_data = [{
+        'id': u.id,
+        'username': u.username,
+        'email': u.email,
+        'time': u.date_joined.strftime('%H:%M')
+    } for u in new_users]
+
+    return Response({
+        'comments': comments_data,
+        'notes': notes_data,
+        'reviews': reviews_data,
+        'users': users_data,
+        'date': date_str
+    })
 
 @api_view(['GET'])
 @permission_classes([IsAdminUser])

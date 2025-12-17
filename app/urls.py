@@ -119,4 +119,5 @@ urlpatterns = [
     path('api/notes/<int:note_id>/comments/', comment_view.note_comments, name='note_comments'),
     path('api/comments/<int:comment_id>/', comment_view.delete_comment, name='delete_comment'),
     path('api/admin/comments/', comment_view.get_all_comments, name='admin_all_comments'),
+    path('api/admin/dashboard/activity-details/', views.get_activity_by_date, name='get_activity_details'),
 ]
