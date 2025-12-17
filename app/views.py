@@ -32,6 +32,15 @@ from django.shortcuts import get_object_or_404
 def home(request):
     return HttpResponse("Bookquest")
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def heartbeat(request):
+    """
+    Endpoint chỉ để frontend gọi định kỳ, giúp ActiveUserMiddleware
+    cập nhật trạng thái "Online" trong Cache.
+    """
+    return Response({"status": "alive"}, status=200)
+
 # ================= AUTH (Giữ nguyên) =================
 class RegisterView(APIView):
     def post(self, request):

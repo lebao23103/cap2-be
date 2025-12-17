@@ -1,6 +1,6 @@
 # app/urls.py
 from django.urls import path
-from . import views
+from . import views, comment_view
 from .chatbot_view import chat_send, conversations_list, conversation_messages, conversation_end
 from .booknote_view import create_book_note, get_user_book_notes, get_note_detail, update_book_note, delete_book_note, get_public_book_notes, get_personalized_book_content, get_all_user_notes, get_user_notes_statistics, vote_note, get_flagged_notes, moderate_note
 from .views import test_pdf_notes_view
@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/books/', views.all_books, name='all_books'),
     path('api/books/<int:book_id>/', views.book_detail_view, name='book_detail_view'),
     path('api/books/<int:book_id>/content/', views.book_content_by_id, name='book_content_by_id'),
+    path('api/heartbeat/', views.heartbeat, name='heartbeat'), # NEW
     path('api/books/author/<str:author_name>/', views.books_by_author, name='books_by_author'),
 
     # ===== Reviews =====
@@ -113,4 +114,9 @@ urlpatterns = [
     path('api/quiz/sessions/', views.get_user_quiz_sessions, name='get_user_quiz_sessions'),
     path('api/quiz/session/<int:session_id>/submit-answer/', views.submit_answer, name='submit_answer'),
     path('api/quiz/session/<int:session_id>/complete/', views.complete_quiz, name='complete_quiz'),
+    
+    # ================= NOTE COMMENTS APIs =================
+    path('api/notes/<int:note_id>/comments/', comment_view.note_comments, name='note_comments'),
+    path('api/comments/<int:comment_id>/', comment_view.delete_comment, name='delete_comment'),
+    path('api/admin/comments/', comment_view.get_all_comments, name='admin_all_comments'),
 ]

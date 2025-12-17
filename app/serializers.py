@@ -3,7 +3,8 @@ from rest_framework.serializers import Serializer, CharField
 from django.contrib.auth.models import User
 
 from .models import (
-    Book, Review, FavoriteBook, ReadingHistory, UserBook, BookNote, Question, QuizSession, UserAnswer
+    Book, Review, FavoriteBook, ReadingHistory, UserBook, BookNote, Question, QuizSession, UserAnswer,
+    NoteComment
 )
 import re
 
@@ -330,6 +331,52 @@ class QuizSessionListSerializer(serializers.ModelSerializer):
             'score',
             'total_questions',
             'completed',
-            'started_at',
             'completed_at',
         ]
+
+
+# ================= NoteComment Serializer =================
+class NoteCommentSerializer(serializers.ModelSerializer):
+    """
+    Serializer cho list comments của một Note.
+    Chỉ trả về comment chưa soft-delete.
+    """
+    user_name = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NoteComment
+        fields = [
+            'id',
+            'user',
+            'user_name',
+            'content',
+            'created_at',
+            'is_owner'
+        ]
+        read_only_fields = ['user', 'created_at', 'user_name', 'is_owner']
+
+    def get_user_name(self, obj):
+        # Tái sử dụng logic lấy tên (First Name > Username masked)
+        user = obj.user
+        fullname = f"{user.first_name} {user.last_name}".strip()
+        if fullname:
+            return fullname
+        
+        username = user.username
+        if '@' in username: # Mask email
+             return username.split('@')[0]
+        return username
+
+    def get_is_owner(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.user == request.user
+        return False
+
+    def create(self, validated_data):
+        # Auto assign user from request
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['user'] = request.user
+        return super().create(validated_data)

@@ -266,3 +266,33 @@ class UserAnswer(models.Model):
 
     def __str__(self):
         return f"Answer for Question {self.question.id}: {self.selected_answer} ({'Correct' if self.is_correct else 'Incorrect'})"
+
+
+class NoteComment(models.Model):
+    """
+    Hệ thống comment cho BookNote.
+    Sử dụng chiến lược Soft Delete để giữ Audit Trail.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='note_comments')
+    note = models.ForeignKey(BookNote, on_delete=models.CASCADE, related_name='comments')
+    
+    content = models.TextField()
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Soft Delete methodology
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='deleted_comments')
+
+    class Meta:
+        ordering = ['created_at'] # Cũ nhất lên đầu (như chat)
+        indexes = [
+            models.Index(fields=['note', 'is_deleted']), # Index để query comment active nhanh
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"Comment by {self.user.username} on Note {self.note.id}"
