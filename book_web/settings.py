@@ -33,7 +33,7 @@ SECRET_KEY = 'django-insecure-&c_d7vk&@#urpyq#@_vq1ju@(4hn6&y-_rq&3p*+2!wbc#t!yr
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
 
@@ -87,11 +87,11 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:4173',
 ]
 
-# Settings quan trọng để chạy qua Tunnel
-CSRF_COOKIE_SECURE = True  # Bắt buộc True vì Cloudflare chạy https
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SAMESITE = 'None'
-SESSION_COOKIE_SAMESITE = 'None'
+# Settings quan trọng để chạy Localhost (HTTP)
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 ROOT_URLCONF = 'book_web.urls'
